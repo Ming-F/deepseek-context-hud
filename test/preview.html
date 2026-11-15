@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>上下文仪表 · 本地预览</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fafafa; color: #1b1b1b;
+  }
+  .chat { flex: 1; overflow: auto; padding: 24px 0; }
+  .msg { max-width: 680px; margin: 0 auto 18px; padding: 0 20px; font-size: 14px; line-height: 1.75; }
+  .msg.user { display: flex; justify-content: flex-end; }
+  .msg.user div { background: #eff2f5; border-radius: 12px; padding: 10px 14px; max-width: 80%; }
+  .msg.ai div { max-width: 100%; }
+  .composerWrap { padding: 12px 20px 24px; }
+  .composer { max-width: 680px; margin: 0 auto; border: 1px solid #e3e3e0; background: #fff; border-radius: 16px; padding: 10px 12px; }
+  textarea { width: 100%; border: none; outline: none; resize: none; font: inherit; font-size: 14px; height: 46px; background: transparent; }
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .send { width: 30px; height: 30px; border-radius: 50%; border: none; background: #dce6f5; color: #185fa5; cursor: pointer; }
+  .panelTop {
+    position: fixed; top: 0; left: 0; right: 0; background: #fff; border-bottom: 1px solid #ececea;
+    padding: 8px 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; z-index: 10;
+    font-size: 12px; color: #666;
+  }
+  .panelTop button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+  .panelTop button:hover { background: #f3f3f1; }
+  .spacer { height: 44px; }
+</style>
+</head>
+<body>
+
+<div class="panelTop" id="topbar">
+  <strong style="color:#1b1b1b;font-size:12px;">本地预览</strong>
+  <span>模拟数据，不连接真实服务</span>
+  <button data-p="62">62%</button>
+  <button data-p="88">88%</button>
+  <button data-p="96">96%</button>
+  <button data-p="blocked">模拟被拦截</button>
+  <button data-p="turn">模拟一轮新增</button>
+  <button data-p="reset">重置</button>
+</div>
+
+<div class="spacer"></div>
+
+<div class="chat">
+  <div class="msg user"><div>帮我排查一下订单服务 OOM 的原因，给出可落地的方案。</div></div>
+  <div class="msg ai"><div>
+    <p>从堆转储看，根因是 Redis 缓存没有设置过期时间，Key 无限增长导致老年代堆积。</p>
+    <p>建议：给缓存加上 TTL，并改用 RedisTemplate 统一封装。</p>
+    <p>必须先用 Java 17 的写法，带注释，先给方案再给代码。</p>
+  </div></div>
+  <div class="msg user"><div>确认一下 JVM 参数，现在是 -Xmx4g，复现频率大概每小时一次。</div></div>
+  <div class="msg ai"><div>
+    <p>已确认：-Xmx4g 在 8G 容器里留了足够堆外空间，不需要调整。</p>
+    <p>下一步需要给出 TTL 建议值与改造代码，先只改缓存模块。</p>
+  </div></div>
+</div>
+
+<div class="composerWrap">
+  <div class="composer">
+    <textarea placeholder="给 DeepSeek 发送消息"></textarea>
+    <div class="bar">
+      <span style="font-size:11px;color:#aaa;">深度思考 (R1)</span>
+      <button class="send">↑</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 桩：让 content.js 在普通页面里也能跑 */
+window.chrome = window.chrome || {};
+(function () {
+  var mem = {};
+  if (!chrome.storage) {
+    chrome.storage = {
+      local: {
+        get: function (k) {
+          if (typeof k === 'string') { var o = {}; if (k in mem) o[k] = mem[k]; return Promise.resolve(o); }
+          return Promise.resolve(Object.assign({}, mem));
+        },
+        set: function (o) { Object.assign(mem, o); return Promise.resolve(); }
+      }
+    };
+  }
+  if (!chrome.runtime) chrome.runtime = { getURL: function (p) { return p; } };
+})();
+</script>
+
+<script src="../src/content.js"></script>
+
+<script>
+(function () {
+  var TAG = '__dsHud';
+  function send(o) { o[TAG] = 1; window.postMessage(o, location.origin); }
+
+  var LIMIT = 962000;
+  var base = 0;
+
+  function boot() {
+    send({ k: 'ready', href: location.href, sessionKey: 'preview' });
+    send({ k: 'limit', tokenLimit: 1000000, historyLimit: LIMIT, source: 'settings' });
+
+    send({ k: 'user', text: '帮我排查一下订单服务 OOM 的原因，给出可落地的方案。' });
+    send({ k: 'assistant', text: '从堆转储看，根因是 Redis 缓存没有设置过期时间，Key 无限增长导致老年代堆积。建议：给缓存加上 TTL，并改用 RedisTemplate 统一封装。', think: '先看堆直方图，再看 GC 日志，判断是缓存堆积而不是内存泄漏。'.repeat(30) });
+    send({ k: 'user', text: '确认一下 JVM 参数，现在是 -Xmx4g，复现频率大概每小时一次。必须用 Java 17，带注释。' });
+    send({ k: 'assistant', text: '已确认：-Xmx4g 在 8G 容器里留了足够堆外空间，不需要调整。下一步需要给出 TTL 建议值与改造代码，先只改缓存模块。', think: '' });
+
+    var ageH = parseFloat(new URLSearchParams(location.search).get('age') || '41');
+    send({ k: 'session-meta', startedAt: Date.now() - ageH * 3600 * 1000, lastAt: Date.now() });
+
+    var qs = new URLSearchParams(location.search);
+    var turns = parseInt(qs.get('turns') || '0', 10);
+
+    if (turns > 0) {
+      // 多轮模拟：做出有起伏的逐轮增量
+      var base = 96000;
+      var plan = [22000, 48000, 15000, 61000, 27000, 33000, 19000, 54000, 24000, 38000];
+      send({ k: 'usage', value: base, source: 'history' });
+      for (var i = 0; i < turns; i++) {
+        (function (idx) {
+          setTimeout(function () {
+            base += plan[idx % plan.length];
+            send({ k: 'usage', value: base, source: 'sse' });
+          }, 700 + idx * 1600);
+        })(i);
+      }
+      var targetPct = parseInt(qs.get('to') || '0', 10);
+      if (targetPct > 0) {
+        setTimeout(function () {
+          send({ k: 'usage', value: Math.round(962000 * targetPct / 100), source: 'sse' });
+        }, 700 + turns * 1600 + 1800);
+      }
+      return;
+    }
+
+    var t1 = 24000, t2 = 88000;
+    send({ k: 'usage', value: 300000, source: 'history' });
+    setTimeout(function () { send({ k: 'usage', value: 300000 + t1, source: 'sse' }); }, 400);
+    setTimeout(function () { send({ k: 'usage', value: 300000 + t1 + 38000, source: 'sse' }); }, 800);
+    setTimeout(function () { send({ k: 'usage', value: 300000 + t1 + 38000 + 12000, source: 'sse' }); }, 1200);
+    setTimeout(function () { send({ k: 'usage', value: 300000 + t1 + 38000 + 12000 + t2, source: 'sse' }); }, 1600);
+  }
+
+  var current = 0;
+  document.querySelectorAll('.panelTop button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = b.getAttribute('data-p');
+      if (p === 'reset') { location.reload(); return; }
+      if (p === 'blocked') { send({ k: 'blocked', reason: 'context_length_exceeded' }); return; }
+      if (p === 'turn') {
+        var delta = 18000 + Math.round(Math.random() * 60000);
+        var next = (current || 300000) + delta;
+        current = next;
+        send({ k: 'usage', value: next, source: 'sse' });
+        return;
+      }
+      var v = Math.round(LIMIT * parseInt(p, 10) / 100);
+      current = v;
+      send({ k: 'usage', value: v, source: 'sse' });
+    });
+  });
+
+  /* ?clean=1 只保留前两条消息，用于截图 */
+  if (new URLSearchParams(location.search).has('clean')) {
+    var msgs = document.querySelectorAll('.msg');
+    for (var mi = 2; mi < msgs.length; mi++) msgs[mi].style.display = 'none';
+  }
+
+  /* ?clean=1 只保留前两条消息，用于截图 */
+  if (new URLSearchParams(location.search).has('clean')) {
+    var msgs = document.querySelectorAll('.msg');
+    for (var mi = 2; mi < msgs.length; mi++) msgs[mi].style.display = 'none';
+  }
+
+  /* 展开时在输入框前留出空间，避免面板盖住对话 */
+  if (new URLSearchParams(location.search).has('expand')) {
+    var pad = document.createElement('div');
+    pad.style.height = '400px';
+    var chatEl = document.querySelector('.chat');
+    if (chatEl) chatEl.style.paddingBottom = '80px';
+    var cw = document.querySelector('.composerWrap');
+    if (cw && cw.parentNode) cw.parentNode.insertBefore(pad, cw);
+  }
+
+  /* ?bare=1 隐藏工具栏，便于截干净的图 */
+  if (new URLSearchParams(location.search).has('bare')) {
+    var tb = document.getElementById('topbar');
+    if (tb) tb.style.display = 'none';
+    var sp = document.querySelector('.spacer');
+    if (sp) sp.style.display = 'none';
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+  /* 回应统计请求，让诊断面板在预览里也有内容 */
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.__dsHud !== 1 || d.k !== 'cmd' || d.cmd !== 'stats') return;
+    send({
+      k: 'stats',
+      stats: {
+        fetchPatched: true, xhrPatched: true, inFrame: false,
+        fetchSeen: 12, xhrSeen: 0,
+        reqLog: [
+          'GET /api/v0/client/settings',
+          'POST /api/v0/chat/history_messages',
+          'POST /api/v0/chat/completion'
+        ],
+        sseEvents: 46, usageHits: 6, historyHits: 1,
+        lastUsageSource: 'sse', replays: 0,
+        fragmentTypes: { THINK: 2, RESPONSE: 1 },
+        answerChars: 512, thinkChars: 1840, errors: []
+      }
+    });
+  });
+
+  /* 回应统计请求，让诊断面板在预览里也有内容 */
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.__dsHud !== 1 || d.k !== 'cmd' || d.cmd !== 'stats') return;
+    send({
+      k: 'stats',
+      stats: {
+        fetchPatched: true, xhrPatched: true, inFrame: false,
+        fetchSeen: 12, xhrSeen: 0,
+        reqLog: [
+          'GET /api/v0/client/settings',
+          'POST /api/v0/chat/history_messages',
+          'POST /api/v0/chat/completion'
+        ],
+        sseEvents: 46, usageHits: 6, historyHits: 1,
+        lastUsageSource: 'sse', replays: 0,
+        fragmentTypes: { THINK: 2, RESPONSE: 1 },
+        answerChars: 512, thinkChars: 1840, errors: []
+      }
+    });
+  });
+
+  /* 截图/调试用：?expand=1 / ?digest=1 / ?diag=1 自动打开对应界面 */
+  setTimeout(function () {
+    var host = document.getElementById('ds-context-hud-host');
+    var sr = host && host.shadowRoot;
+    if (!sr) return;
+    var q = new URLSearchParams(location.search);
+    if (q.get('p') === 'blocked') send({ k: 'blocked', reason: 'context_length_exceeded' });
+    else if (q.get('p')) send({ k: 'usage', value: Math.round(962000 * parseInt(q.get('p'), 10) / 100), source: 'sse' });
+    if (q.has('expand') || q.has('digest') || q.has('diag')) {
+      sr.querySelector('.band').click();
+    }
+    if (q.has('digest')) sr.querySelector('.digestBtn').click();
+    if (q.has('diag')) sr.querySelector('.diagBtn').click();
+  }, 2400);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "DeepSeek 上下文仪表",
+  "short_name": "上下文仪表",
+  "version": "0.2.0",
+  "description": "在 DeepSeek 网页版显示真实的上下文用量、剩余空间、预计可聊轮数与对话时长，快满时生成可粘贴的交接摘要。",
+  "minimum_chrome_version": "111",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://chat.deepseek.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "src/main-world.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
+}
